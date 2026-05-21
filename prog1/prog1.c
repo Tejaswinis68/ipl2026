@@ -1,204 +1,171 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
-typedef struct {
-    int id;
+struct Student
+{
+    int roll;
     char name[30];
-    int age;
-} Record;
+    float marks;
+};
 
-void writeRecords(const char *filename, int n) {
-    FILE *fp = fopen(filename, "wb");
-    if (!fp) {
-        perror("Unable to open file for writing");
-        return;
-    }
-
-    for (int i = 0; i < n; i++) {
-        Record rec;
-        printf("Enter record %d ID: ", i + 1);
-        scanf("%d", &rec.id);
-        getchar();
-        printf("Enter record %d name: ", i + 1);
-        fgets(rec.name, sizeof(rec.name), stdin);
-        rec.name[strcspn(rec.name, "\n")] = '\0';
-        printf("Enter record %d age: ", i + 1);
-        scanf("%d", &rec.age);
-        getchar();
-
-        fwrite(&rec, sizeof(Record), 1, fp);
-    }
-
-    fclose(fp);
-    printf("%d records written to %s\n", n, filename);
+/* Function to display a record */
+void display(struct Student s)
+{
+    printf("\nRoll No : %d", s.roll);
+    printf("\nName    : %s", s.name);
+    printf("\nMarks   : %.2f\n", s.marks);
 }
 
-void displayRecord(const char *filename, int m) {
-    FILE *fp = fopen(filename, "rb");
-    if (!fp) {
-        perror("Unable to open file for reading");
+/* Function to get mth record using fseek */
+void getRecord(int m)
+{
+    FILE *fp;
+    struct Student s;
+
+    fp = fopen("student.dat", "rb");
+
+    if (fp == NULL)
+    {
+        printf("File cannot be opened\n");
         return;
     }
 
-    if (m < 1) {
-        printf("Record number must be 1 or greater.\n");
-        fclose(fp);
-        return;
-    }
+    /* Move file pointer to mth record */
+    fseek(fp, (m - 1) * sizeof(struct Student), SEEK_SET);
 
-    long offset = (long)(m - 1) * sizeof(Record);
-    if (fseek(fp, offset, SEEK_SET) != 0) {
-        perror("fseek failed");
-        fclose(fp);
-        return;
+    if (fread(&s, sizeof(struct Student), 1, fp) == 1)
+    {
+        printf("\n%dth Record:\n", m);
+        display(s);
     }
-
-    Record rec;
-    if (fread(&rec, sizeof(Record), 1, fp) != 1) {
-        printf("Record %d does not exist.\n", m);
-    } else {
-        printf("Record %d:\n", m);
-        printf("  ID: %d\n", rec.id);
-        printf("  Name: %s\n", rec.name);
-        printf("  Age: %d\n", rec.age);
+    else
+    {
+        printf("\nRecord not found\n");
     }
 
     fclose(fp);
 }
 
-void displayAllRecords(const char *filename) {
-    FILE *fp = fopen(filename, "rb");
-    if (!fp) {
-        perror("Unable to open file for reading");
+/* Function to delete a record */
+void deleteRecord(int delRoll)
+{
+    FILE *fp, *temp;
+    struct Student s;
+    int found = 0;
+
+    fp = fopen("student.dat", "rb");
+    temp = fopen("temp.dat", "wb");
+
+    if (fp == NULL || temp == NULL)
+    {
+        printf("Error opening file\n");
         return;
     }
 
-    Record rec;
-    int index = 1;
-    while (fread(&rec, sizeof(Record), 1, fp) == 1) {
-        printf("Record %d:\n", index);
-        printf("  ID: %d\n", rec.id);
-        printf("  Name: %s\n", rec.name);
-        printf("  Age: %d\n", rec.age);
-        index++;
-    }
-
-    if (index == 1) {
-        printf("No records found in %s.\n", filename);
-    }
-
-    fclose(fp);
-}
-
-void deleteRecord(const char *filename, int m) {
-    if (m < 1) {
-        printf("Record number must be 1 or greater.\n");
-        return;
-    }
-
-    FILE *src = fopen(filename, "rb");
-    if (!src) {
-        perror("Unable to open file for reading");
-        return;
-    }
-
-    FILE *tmp = fopen("temp.dat", "wb");
-    if (!tmp) {
-        perror("Unable to open temporary file");
-        fclose(src);
-        return;
-    }
-
-    Record rec;
-    int index = 1;
-    int deleted = 0;
-    while (fread(&rec, sizeof(Record), 1, src) == 1) {
-        if (index == m) {
-            deleted = 1;
-        } else {
-            fwrite(&rec, sizeof(Record), 1, tmp);
+    /* Copy all records except the one to delete */
+    while (fread(&s, sizeof(struct Student), 1, fp))
+    {
+        if (s.roll != delRoll)
+        {
+            fwrite(&s, sizeof(struct Student), 1, temp);
         }
-        index++;
+        else
+        {
+            found = 1;
+        }
     }
 
-    fclose(src);
-    fclose(tmp);
+    fclose(fp);
+    fclose(temp);
 
-    if (!deleted) {
-        printf("Record %d does not exist. No deletion performed.\n", m);
-        remove("temp.dat");
-        return;
-    }
+    /* Replace original file with temp file */
+    remove("student.dat");
+    rename("temp.dat", "student.dat");
 
-    if (remove(filename) != 0) {
-        perror("Unable to remove original file");
-        remove("temp.dat");
-        return;
-    }
-
-    if (rename("temp.dat", filename) != 0) {
-        perror("Unable to rename temporary file");
-        return;
-    }
-
-    printf("Record %d deleted successfully.\n", m);
+    if (found)
+        printf("\nRecord deleted successfully\n");
+    else
+        printf("\nRecord not found\n");
 }
 
-int main(void) {
-    const char *filename = "records.dat";
-    int choice;
+/* Function to display all records */
+void displayAll()
+{
+    FILE *fp;
+    struct Student s;
 
-    do {
-        printf("\nBinary Record Manager\n");
-        printf("1. Create records\n");
-        printf("2. Display all records\n");
-        printf("3. Get m-th record\n");
-        printf("4. Delete record\n");
-        printf("5. Exit\n");
-        printf("Enter your choice: ");
-        scanf("%d", &choice);
-        getchar();
+    fp = fopen("student.dat", "rb");
 
-        switch (choice) {
-            case 1: {
-                int n;
-                printf("Enter number of records to store: ");
-                scanf("%d", &n);
-                getchar();
-                if (n > 0) {
-                    writeRecords(filename, n);
-                } else {
-                    printf("Invalid number of records.\n");
-                }
-                break;
-            }
-            case 2:
-                displayAllRecords(filename);
-                break;
-            case 3: {
-                int m;
-                printf("Enter record number to read: ");
-                scanf("%d", &m);
-                getchar();
-                displayRecord(filename, m);
-                break;
-            }
-            case 4: {
-                int m;
-                printf("Enter record number to delete: ");
-                scanf("%d", &m);
-                getchar();
-                deleteRecord(filename, m);
-                break;
-            }
-            case 5:
-                printf("Exiting...\n");
-                break;
-            default:
-                printf("Invalid choice. Please try again.\n");
-        }
-    } while (choice != 5);
+    if (fp == NULL)
+    {
+        printf("File cannot be opened\n");
+        return;
+    }
+
+    printf("\nAll Records:\n");
+
+    while (fread(&s, sizeof(struct Student), 1, fp))
+    {
+        display(s);
+    }
+
+    fclose(fp);
+}
+
+int main()
+{
+    FILE *fp;
+    struct Student s;
+    int n, i, m, delRoll;
+
+    fp = fopen("student.dat", "wb");
+
+    if (fp == NULL)
+    {
+        printf("File cannot be created\n");
+        return 1;
+    }
+
+    printf("Enter number of records: ");
+    scanf("%d", &n);
+
+    /* Store records */
+    for (i = 0; i < n; i++)
+    {
+        printf("\nEnter details of student %d\n", i + 1);
+
+        printf("Roll No: ");
+        scanf("%d", &s.roll);
+
+        printf("Name: ");
+        scanf("%s", s.name);
+
+        printf("Marks: ");
+        scanf("%f", &s.marks);
+
+        fwrite(&s, sizeof(struct Student), 1, fp);
+    }
+
+    fclose(fp);
+
+    /* Display all records */
+    displayAll();
+
+    /* Get mth record */
+    printf("\nEnter record number to fetch: ");
+    scanf("%d", &m);
+
+    getRecord(m);
+
+    /* Delete a record */
+    printf("\nEnter roll number to delete: ");
+    scanf("%d", &delRoll);
+
+    deleteRecord(delRoll);
+
+    /* Display remaining records */
+    printf("\nRecords after deletion:\n");
+    displayAll();
 
     return 0;
 }
